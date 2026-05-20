@@ -1,5 +1,7 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
+import { spawn } from 'child_process';
+import ffmpegInstaller from '@ffmpeg-installer/ffmpeg';
 import fs from 'fs';
 import path from 'path';
 
@@ -22,6 +24,45 @@ videoRouter.get('/', (req: Request, res: Response) => {
   }
 
   const ext = path.extname(filePath).toLowerCase();
+
+  if (ext === '.mkv') {
+    const audioTrackParam = req.query.audioTrack as string | undefined;
+    const audioTrack = audioTrackParam !== undefined ? parseInt(audioTrackParam, 10) : 0;
+
+    const ffmpeg = spawn(ffmpegInstaller.path, [
+      '-loglevel', 'warning',
+      '-i', filePath,
+      '-map', '0:v:0',
+      '-map', `0:a:${audioTrack}`,
+      '-c:v', 'copy',
+      '-c:a', 'aac',
+      '-ac', '2',
+      '-ar', '48000',
+      '-movflags', 'frag_keyframe+empty_moov+default_base_moof',
+      '-f', 'mp4',
+      'pipe:1',
+    ]);
+
+    ffmpeg.on('error', () => {
+      // ffmpeg absent — fallback sur le streaming brut (vidéo OK, codec audio peut échouer)
+      if (!res.headersSent) {
+        const stat = fs.statSync(filePath);
+        res.writeHead(200, { 'Content-Length': stat.size, 'Content-Type': 'video/x-matroska' });
+        fs.createReadStream(filePath).pipe(res);
+      }
+    });
+
+    ffmpeg.on('spawn', () => {
+      res.setHeader('Content-Type', 'video/mp4');
+      res.setHeader('Cache-Control', 'no-cache');
+      ffmpeg.stdout.pipe(res);
+    });
+
+    ffmpeg.stderr.on('data', (d: Buffer) => console.error('[ffmpeg]', d.toString()));
+    req.on('close', () => ffmpeg.kill('SIGTERM'));
+    return;
+  }
+
   const mime = MIME_TYPES[ext] ?? 'video/mp4';
   const stat = fs.statSync(filePath);
   const fileSize = stat.size;
