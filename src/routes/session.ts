@@ -40,7 +40,7 @@ export function createSessionRouter(state: AppState): Router {
     state.cancelSchedule();
     state.config.status = 'feature';
     state.saveConfig();
-    state.broadcast({ type: 'play_feature', file: state.config.featureFile });
+    state.broadcast({ type: 'play_feature', file: state.config.featureFile, audioTrack: state.config.featureAudioTrack ?? undefined });
     res.json({ ok: true });
   });
 

@@ -10,7 +10,7 @@ export function loadConfig(): Config {
       return JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8')) as Config;
     }
   } catch {}
-  return { loopFolder: '', featureFile: '', featureTime: '', status: 'idle' };
+  return { loopFolder: '', featureFile: '', featureTime: '', featureAudioTrack: null, status: 'idle' };
 }
 
 export function saveConfig(config: Config): void {

@@ -162,6 +162,19 @@
   }
 
   .time-input:focus { border-color: var(--accent); }
+  .track-select {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    padding: 8px 12px;
+    font-size: 14px;
+    font-family: 'DM Mono', monospace;
+    color: var(--accent);
+    border-radius: 3px;
+    width: 100%;
+    outline: none;
+    cursor: pointer;
+  }
+  .track-select:focus { border-color: var(--accent); }
 
   .video-list {
     display: flex;
@@ -435,6 +448,13 @@
       </div>
     </div>
 
+    <div id="audioTrackSection" class="section" style="display:none">
+      <label class="label">Piste audio</label>
+      <select id="audioTrackSelect" class="track-select" onchange="onAudioTrackChange(this.value)">
+        <option value="-1">Piste par défaut</option>
+      </select>
+    </div>
+
     <div class="section">
       <label class="label">Heure de début du film</label>
       <input type="time" class="time-input" id="featureTime" placeholder="20:30">
@@ -545,6 +565,10 @@ function renderConfig() {
     featEl.classList.add('empty');
     featText.textContent = 'Choisir un fichier…';
   }
+
+  // Audio tracks
+  if (config.featureFile) fetchAudioTracks(config.featureFile);
+  else document.getElementById('audioTrackSection').style.display = 'none';
 
   // Time
   if (config.featureTime) {
@@ -794,6 +818,35 @@ async function confirmBrowser() {
 
   closeModal();
   showToast('Enregistré', 'ok');
+}
+
+async function fetchAudioTracks(filePath) {
+  try {
+    const tracks = await fetch(`/api/audio-tracks?path=${encodeURIComponent(filePath)}`).then(r => r.json());
+    renderAudioTracks(tracks);
+  } catch {
+    document.getElementById('audioTrackSection').style.display = 'none';
+  }
+}
+
+function renderAudioTracks(tracks) {
+  const section = document.getElementById('audioTrackSection');
+  const select = document.getElementById('audioTrackSelect');
+  if (!tracks || tracks.length <= 1) { section.style.display = 'none'; return; }
+  const current = config.featureAudioTrack ?? -1;
+  select.innerHTML = '<option value="-1">Piste par défaut</option>' +
+    tracks.map(t => {
+      const label = t.title || t.language || `Piste ${t.index + 1}`;
+      const extra = [t.codec, t.language].filter(Boolean).join(' · ');
+      return `<option value="${t.index}"${t.index === current ? ' selected' : ''}>${label}${extra ? ` (${extra})` : ''}</option>`;
+    }).join('');
+  section.style.display = 'block';
+}
+
+async function onAudioTrackChange(val) {
+  const track = val === '-1' ? null : parseInt(val, 10);
+  config.featureAudioTrack = track;
+  await saveConfigField('featureAudioTrack', track);
 }
 
 function esc(str) {

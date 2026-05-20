@@ -195,4 +195,6 @@ dist
 
 config.json
 
+.claude
+
 # End of https://www.toptal.com/developers/gitignore/api/visualstudiocode,node,macos
