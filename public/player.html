@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>Cinéma — Projecteur</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: #000;
+    color: #fff;
+    font-family: 'Courier New', monospace;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  #videoEl {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: none;
+  }
+
+  #idleScreen {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: #000;
+    gap: 16px;
+  }
+
+  .idle-title {
+    font-size: 14px;
+    letter-spacing: 0.4em;
+    text-transform: uppercase;
+    color: #333;
+  }
+
+  .idle-dot {
+    width: 4px; height: 4px;
+    border-radius: 50%;
+    background: #222;
+    animation: breathe 3s ease-in-out infinite;
+  }
+
+  @keyframes breathe {
+    0%, 100% { opacity: 0.3; transform: scale(1); }
+    50% { opacity: 0.8; transform: scale(1.5); }
+  }
+
+  #overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #000;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.8s ease;
+    z-index: 10;
+  }
+
+  #overlay.visible { opacity: 1; }
+
+  #statusOverlay {
+    position: absolute;
+    bottom: 20px;
+    right: 20px;
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: #1a1a1a;
+    z-index: 20;
+    transition: color 0.5s;
+  }
+
+  #statusOverlay.visible { color: #444; }
+
+  /* Click to fullscreen hint */
+  #hint {
+    position: absolute;
+    top: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: #333;
+    cursor: pointer;
+    z-index: 30;
+    transition: opacity 0.3s;
+  }
+
+  #hint:hover { color: #666; }
+</style>
+</head>
+<body>
+
+<div id="idleScreen">
+  <div class="idle-title">Projecteur</div>
+  <div class="idle-dot"></div>
+</div>
+
+<video id="videoEl" playsinline></video>
+
+<!-- Fade transition overlay -->
+<div id="overlay"></div>
+
+<div id="statusOverlay">En attente</div>
+<div id="hint" onclick="toggleFullscreen()">Plein écran</div>
+
+<script>
+const video = document.getElementById('videoEl');
+const idleScreen = document.getElementById('idleScreen');
+const overlay = document.getElementById('overlay');
+const statusEl = document.getElementById('statusOverlay');
+const hint = document.getElementById('hint');
+
+let currentMode = 'idle'; // 'idle' | 'loop' | 'feature'
+let loopVideos = [];
+let loopIndex = 0;
+let featureFile = '';
+
+// --- WebSocket ---
+let ws;
+
+function connect() {
+  ws = new WebSocket(`ws://${location.host}`);
+
+  ws.onmessage = (e) => {
+    const msg = JSON.parse(e.data);
+    handleMessage(msg);
+  };
+
+  ws.onclose = () => setTimeout(connect, 2000);
+}
+
+function handleMessage(msg) {
+  console.log('[Player]', msg.type, msg);
+
+  switch (msg.type) {
+    case 'state':
+      // Restore state if server restarted
+      if (msg.config.status === 'running' && msg.config.loopFolder) {
+        // Will need videos — fetch them
+        fetchAndStartLoop();
+      } else if (msg.config.status === 'feature' && msg.config.featureFile) {
+        startFeature(msg.config.featureFile);
+      }
+      break;
+
+    case 'play_loop':
+      loopVideos = msg.videos || [];
+      loopIndex = 0;
+      startLoop();
+      break;
+
+    case 'play_feature':
+      featureFile = msg.file;
+      startFeature(featureFile);
+      break;
+
+    case 'stop':
+      stopAll();
+      break;
+
+    case 'config_update':
+      // Just update internal refs if needed
+      break;
+  }
+}
+
+// --- Loop ---
+async function fetchAndStartLoop() {
+  const res = await fetch('/api/config');
+  const data = await res.json();
+  loopVideos = data.videos || [];
+  loopIndex = 0;
+  if (loopVideos.length) startLoop();
+}
+
+function startLoop() {
+  if (!loopVideos.length) {
+    setStatus('Aucune vidéo en boucle');
+    return;
+  }
+  currentMode = 'loop';
+  playLoopItem(loopIndex);
+}
+
+function playLoopItem(index) {
+  const item = loopVideos[index];
+  if (!item) return;
+
+  fadeIn(() => {
+    video.src = `/video?path=${encodeURIComponent(item.path)}`;
+    video.play().catch(e => console.warn('Play error:', e));
+    showVideo();
+    setStatus(`Boucle — ${item.name}`);
+    fadeOut();
+  });
+}
+
+video.addEventListener('ended', () => {
+  if (currentMode === 'loop') {
+    loopIndex = (loopIndex + 1) % loopVideos.length;
+    playLoopItem(loopIndex);
+  } else if (currentMode === 'feature') {
+    // Feature ended → notify server → back to loop
+    fetch('/api/feature-ended', { method: 'POST' });
+    // Server will broadcast play_loop back to us
+  }
+});
+
+// --- Feature ---
+function startFeature(filePath) {
+  currentMode = 'feature';
+
+  fadeIn(() => {
+    video.src = `/video?path=${encodeURIComponent(filePath)}`;
+    video.play().catch(e => console.warn('Play error:', e));
+    showVideo();
+    const name = filePath.split('/').pop();
+    setStatus(`Film — ${name}`);
+    fadeOut();
+  });
+}
+
+// --- Stop ---
+function stopAll() {
+  currentMode = 'idle';
+  fadeIn(() => {
+    video.pause();
+    video.src = '';
+    hideVideo();
+    setStatus('En attente');
+    fadeOut();
+  });
+}
+
+// --- UI helpers ---
+function showVideo() {
+  video.style.display = 'block';
+  idleScreen.style.display = 'none';
+}
+
+function hideVideo() {
+  video.style.display = 'none';
+  idleScreen.style.display = 'flex';
+}
+
+function setStatus(text) {
+  statusEl.textContent = text;
+  statusEl.classList.add('visible');
+  clearTimeout(statusEl._timeout);
+  statusEl._timeout = setTimeout(() => statusEl.classList.remove('visible'), 3000);
+}
+
+// Fade to black then back
+function fadeIn(callback) {
+  overlay.classList.add('visible');
+  setTimeout(() => {
+    callback();
+  }, 400);
+}
+
+function fadeOut() {
+  setTimeout(() => {
+    overlay.classList.remove('visible');
+  }, 200);
+}
+
+// --- Fullscreen ---
+function toggleFullscreen() {
+  if (!document.fullscreenElement) {
+    document.documentElement.requestFullscreen();
+    hint.style.opacity = '0';
+    setTimeout(() => hint.style.display = 'none', 500);
+  } else {
+    document.exitFullscreen();
+  }
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'f' || e.key === 'F') toggleFullscreen();
+  if (e.key === 'Escape' && document.fullscreenElement) document.exitFullscreen();
+});
+
+// Hide hint after 5s
+setTimeout(() => {
+  hint.style.opacity = '0';
+  setTimeout(() => hint.style.display = 'none', 500);
+}, 5000);
+
+// --- Init ---
+connect();
+</script>
+</body>
+</html>
