@@ -1,6 +1,21 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
-import type { AppState } from '../types';
+import type { AppState, Config, VideoFile, LoopItem } from '../types';
+
+function buildLoopItems(videos: VideoFile[], config: Config): LoopItem[] {
+  const { welcomePageInterval, welcomePageDuration, welcomePage } = config;
+  const items: LoopItem[] = [];
+  const wp: LoopItem = { type: 'welcome_page', duration: welcomePageDuration, config: welcomePage };
+
+  if (welcomePageInterval) items.push(wp);
+
+  videos.forEach((v, i) => {
+    items.push({ type: 'video', ...v });
+    if (welcomePageInterval && (i + 1) % welcomePageInterval === 0) items.push(wp);
+  });
+
+  return items.length ? items : videos.map(v => ({ type: 'video', ...v }));
+}
 
 export function createSessionRouter(state: AppState): Router {
   const router = Router();
@@ -15,7 +30,7 @@ export function createSessionRouter(state: AppState): Router {
     state.saveConfig();
 
     const videos = state.getVideosInFolder(state.config.loopFolder);
-    state.broadcast({ type: 'play_loop', videos });
+    state.broadcast({ type: 'play_loop', items: buildLoopItems(videos, state.config) });
 
     if (state.config.featureTime && state.config.featureFile) {
       state.scheduleFeature(state.config.featureTime);
@@ -47,8 +62,9 @@ export function createSessionRouter(state: AppState): Router {
   router.post('/feature-ended', (_req: Request, res: Response) => {
     state.config.status = 'running';
     state.saveConfig();
+
     const videos = state.getVideosInFolder(state.config.loopFolder);
-    state.broadcast({ type: 'play_loop', videos });
+    state.broadcast({ type: 'play_loop', items: buildLoopItems(videos, state.config) });
 
     if (state.config.featureTime && state.config.featureFile) {
       state.scheduleFeature(state.config.featureTime);

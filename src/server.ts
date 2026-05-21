@@ -38,22 +38,35 @@ const state: AppState = {
   broadcast,
 };
 
-app.use(express.json());
-app.use(express.static(path.join(__dirname, '..', 'public')));
-app.use('/video', videoRouter);
-app.use('/api', createApiRouter(state));
+async function main() {
+  app.use(express.json());
+  app.use('/video', videoRouter);
+  app.use('/api', createApiRouter(state));
 
-wss.on('connection', (ws: WebSocket) => {
-  clients.add(ws);
-  const stateMsg: WSMessage = { type: 'state', config };
-  ws.send(JSON.stringify(stateMsg));
-  ws.on('close', () => clients.delete(ws));
-  ws.on('error', () => clients.delete(ws));
-});
+  if (process.env.NODE_ENV !== 'production') {
+    const { createServer: createViteServer } = await import('vite');
+    const vite = await createViteServer({ server: { middlewareMode: true }, appType: 'spa' });
+    // Serve player.html and other static files before Vite's SPA fallback
+    app.use(express.static(path.join(__dirname, '..', 'public'), { index: false }));
+    app.use(vite.middlewares);
+  } else {
+    app.use(express.static(path.join(__dirname, '..', 'public')));
+  }
 
-server.listen(PORT, () => {
-  console.log(`\n🎬 Cinema Player running`);
-  console.log(`   Config UI  → http://localhost:${PORT}`);
-  console.log(`   Player     → http://localhost:${PORT}/player.html\n`);
-  if (config.loopFolder) doWatchFolder(config.loopFolder, notifyFolderChange);
-});
+  wss.on('connection', (ws: WebSocket) => {
+    clients.add(ws);
+    const stateMsg: WSMessage = { type: 'state', config };
+    ws.send(JSON.stringify(stateMsg));
+    ws.on('close', () => clients.delete(ws));
+    ws.on('error', () => clients.delete(ws));
+  });
+
+  server.listen(PORT, () => {
+    console.log(`\n🎬 Cinema Player running`);
+    console.log(`   Config UI  → http://localhost:${PORT}`);
+    console.log(`   Player     → http://localhost:${PORT}/player.html\n`);
+    if (config.loopFolder) doWatchFolder(config.loopFolder, notifyFolderChange);
+  });
+}
+
+main();

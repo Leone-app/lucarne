@@ -197,4 +197,10 @@ config.json
 
 .claude
 
+*.woff2
+
+public/assets/
+public/index.html
+public/fonts/
+
 # End of https://www.toptal.com/developers/gitignore/api/visualstudiocode,node,macos

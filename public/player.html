@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <title>Cinéma — Projecteur</title>
+<link rel="stylesheet" href="/fonts/fonts.css">
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
 
@@ -100,6 +101,94 @@
   }
 
   #hint:hover { color: #666; }
+
+  #welcomeStage {
+    display: none;
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    overflow: hidden;
+  }
+
+  .ws-inner {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 20px;
+    padding: 80px;
+  }
+
+  .ws-brand {
+    font-family: 'Cormorant Garamond', serif;
+    font-style: italic;
+    font-weight: 500;
+    font-size: clamp(32px, 5vw, 80px);
+    letter-spacing: 0.3em;
+  }
+
+  .ws-event {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 300;
+    font-size: clamp(10px, 1.2vw, 14px);
+    letter-spacing: 0.4em;
+    text-transform: uppercase;
+    opacity: 0.55;
+  }
+
+  .ws-title {
+    font-family: 'Cormorant Garamond', serif;
+    font-style: italic;
+    font-weight: 500;
+    font-size: clamp(22px, 4vw, 56px);
+    letter-spacing: 0.06em;
+    text-align: center;
+  }
+
+  .ws-subtitle {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 300;
+    font-size: clamp(10px, 1.1vw, 14px);
+    letter-spacing: 0.2em;
+    opacity: 0.6;
+    text-align: center;
+  }
+
+  .ws-clock {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 300;
+    font-size: clamp(32px, 6vw, 80px);
+    letter-spacing: 0.15em;
+    margin-top: 8px;
+  }
+
+  .ws-date {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 300;
+    font-size: clamp(9px, 0.9vw, 12px);
+    letter-spacing: 0.35em;
+    text-transform: uppercase;
+    opacity: 0.35;
+  }
+
+  .ws-logos {
+    display: flex;
+    gap: 28px;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-top: 16px;
+  }
+
+  .ws-logos > div {
+    height: 44px;
+    display: flex;
+    align-items: center;
+  }
+
+  .ws-logos svg { height: 100%; width: auto; }
 </style>
 </head>
 <body>
@@ -111,6 +200,8 @@
 
 <video id="videoEl" playsinline></video>
 
+<div id="welcomeStage"></div>
+
 <!-- Fade transition overlay -->
 <div id="overlay"></div>
 
@@ -120,27 +211,25 @@
 <script>
 const video = document.getElementById('videoEl');
 const idleScreen = document.getElementById('idleScreen');
+const welcomeStage = document.getElementById('welcomeStage');
 const overlay = document.getElementById('overlay');
 const statusEl = document.getElementById('statusOverlay');
 const hint = document.getElementById('hint');
 
 let currentMode = 'idle'; // 'idle' | 'loop' | 'feature'
-let loopVideos = [];
+let loopItems = [];
 let loopIndex = 0;
 let featureFile = '';
 let pendingAudioTrack = null;
+let welcomeClockInterval = null;
+let welcomeTimeout = null;
 
 // --- WebSocket ---
 let ws;
 
 function connect() {
   ws = new WebSocket(`ws://${location.host}`);
-
-  ws.onmessage = (e) => {
-    const msg = JSON.parse(e.data);
-    handleMessage(msg);
-  };
-
+  ws.onmessage = (e) => handleMessage(JSON.parse(e.data));
   ws.onclose = () => setTimeout(connect, 2000);
 }
 
@@ -149,9 +238,7 @@ function handleMessage(msg) {
 
   switch (msg.type) {
     case 'state':
-      // Restore state if server restarted
       if (msg.config.status === 'running' && msg.config.loopFolder) {
-        // Will need videos — fetch them
         fetchAndStartLoop();
       } else if (msg.config.status === 'feature' && msg.config.featureFile) {
         pendingAudioTrack = msg.config.featureAudioTrack ?? null;
@@ -160,7 +247,7 @@ function handleMessage(msg) {
       break;
 
     case 'play_loop':
-      loopVideos = msg.videos || [];
+      loopItems = msg.items || [];
       loopIndex = 0;
       startLoop();
       break;
@@ -174,10 +261,6 @@ function handleMessage(msg) {
     case 'stop':
       stopAll();
       break;
-
-    case 'config_update':
-      // Just update internal refs if needed
-      break;
   }
 }
 
@@ -185,13 +268,27 @@ function handleMessage(msg) {
 async function fetchAndStartLoop() {
   const res = await fetch('/api/config');
   const data = await res.json();
-  loopVideos = data.videos || [];
+  const videos = data.videos || [];
+  loopItems = buildLoopItems(videos, data);
   loopIndex = 0;
-  if (loopVideos.length) startLoop();
+  if (loopItems.length) startLoop();
+}
+
+function buildLoopItems(videos, config) {
+  const { welcomePageInterval, welcomePageDuration, welcomePage } = config;
+  if (!welcomePageInterval) return videos.map(v => ({ type: 'video', ...v }));
+  const items = [];
+  const wp = { type: 'welcome_page', duration: welcomePageDuration, config: welcomePage };
+  items.push(wp);
+  videos.forEach((v, i) => {
+    items.push({ type: 'video', ...v });
+    if ((i + 1) % welcomePageInterval === 0) items.push(wp);
+  });
+  return items.length ? items : videos.map(v => ({ type: 'video', ...v }));
 }
 
 function startLoop() {
-  if (!loopVideos.length) {
+  if (!loopItems.length) {
     setStatus('Aucune vidéo en boucle');
     return;
   }
@@ -200,41 +297,57 @@ function startLoop() {
 }
 
 function playLoopItem(index) {
-  const item = loopVideos[index];
+  const item = loopItems[index];
   if (!item) return;
 
-  fadeIn(() => {
-    video.src = `/video?path=${encodeURIComponent(item.path)}`;
-    video.play().catch(e => console.warn('Play error:', e));
-    showVideo();
-    setStatus(`Boucle — ${item.name}`);
-    fadeOut();
-  });
+  if (item.type === 'welcome_page') {
+    fadeIn(() => {
+      clearWelcomeTimers();
+      video.pause();
+      video.style.display = 'none';
+      idleScreen.style.display = 'none';
+      showWelcomePage(item.config);
+      setStatus("Page d'accueil");
+      fadeOut();
+      welcomeTimeout = setTimeout(() => {
+        if (currentMode === 'loop') {
+          loopIndex = (loopIndex + 1) % loopItems.length;
+          playLoopItem(loopIndex);
+        }
+      }, item.duration * 1000);
+    });
+  } else {
+    fadeIn(() => {
+      hideWelcomePage();
+      video.src = `/video?path=${encodeURIComponent(item.path)}`;
+      video.play().catch(e => console.warn('Play error:', e));
+      showVideo();
+      setStatus(`Boucle — ${item.name}`);
+      fadeOut();
+    });
+  }
 }
 
 video.addEventListener('ended', () => {
   if (currentMode === 'loop') {
-    loopIndex = (loopIndex + 1) % loopVideos.length;
+    loopIndex = (loopIndex + 1) % loopItems.length;
     playLoopItem(loopIndex);
   } else if (currentMode === 'feature') {
-    // Feature ended → notify server → back to loop
     fetch('/api/feature-ended', { method: 'POST' });
-    // Server will broadcast play_loop back to us
   }
 });
 
 // --- Feature ---
 function startFeature(filePath) {
   currentMode = 'feature';
-
+  clearWelcomeTimers();
   fadeIn(() => {
+    hideWelcomePage();
     const trackParam = pendingAudioTrack !== null ? `&audioTrack=${pendingAudioTrack}` : '';
     video.src = `/video?path=${encodeURIComponent(filePath)}${trackParam}`;
-
     video.play().catch(e => console.warn('Play error:', e));
     showVideo();
-    const name = filePath.split('/').pop();
-    setStatus(`Film — ${name}`);
+    setStatus(`Film — ${filePath.split('/').pop()}`);
     fadeOut();
   });
 }
@@ -242,13 +355,69 @@ function startFeature(filePath) {
 // --- Stop ---
 function stopAll() {
   currentMode = 'idle';
+  clearWelcomeTimers();
   fadeIn(() => {
     video.pause();
     video.src = '';
     hideVideo();
+    hideWelcomePage();
     setStatus('En attente');
     fadeOut();
   });
+}
+
+// --- Welcome page ---
+function showWelcomePage(cfg) {
+  welcomeStage.style.display = 'block';
+  welcomeStage.style.background = cfg.bg;
+  renderStageContent(cfg);
+}
+
+function hideWelcomePage() {
+  welcomeStage.style.display = 'none';
+  clearWelcomeTimers();
+}
+
+function clearWelcomeTimers() {
+  if (welcomeClockInterval) { clearInterval(welcomeClockInterval); welcomeClockInterval = null; }
+  if (welcomeTimeout) { clearTimeout(welcomeTimeout); welcomeTimeout = null; }
+}
+
+function renderStageContent(cfg) {
+  const fg = cfg.fg || '#ece6d5';
+  const accent = cfg.accent || '#e8c878';
+
+  const logosHtml = (cfg.logos || []).length
+    ? `<div class="ws-logos">${cfg.logos.map(svg => `<div>${svg}</div>`).join('')}</div>`
+    : '';
+
+  welcomeStage.innerHTML = `
+    <div class="ws-inner" style="color:${fg};">
+      ${cfg.showBrand && cfg.brandText ? `<div class="ws-brand" style="color:${accent};">${cfg.brandText}</div>` : ''}
+      ${cfg.eventName ? `<div class="ws-event">${cfg.eventName}</div>` : ''}
+      ${cfg.title ? `<div class="ws-title">${cfg.title}</div>` : ''}
+      ${cfg.subtitle ? `<div class="ws-subtitle">${cfg.subtitle}</div>` : ''}
+      ${cfg.mode !== 'none' ? `<div class="ws-clock" id="wpClock" style="color:${accent};"></div>` : ''}
+      ${logosHtml}
+      ${cfg.showDate ? `<div class="ws-date" id="wpDate"></div>` : ''}
+    </div>
+  `;
+
+  if (cfg.mode !== 'none') {
+    const clockEl = document.getElementById('wpClock');
+    const tick = () => {
+      if (clockEl) clockEl.textContent = new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    };
+    tick();
+    welcomeClockInterval = setInterval(tick, 1000);
+  }
+
+  if (cfg.showDate) {
+    const dateEl = document.getElementById('wpDate');
+    if (dateEl) {
+      dateEl.textContent = new Date().toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+    }
+  }
 }
 
 // --- UI helpers ---
