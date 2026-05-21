@@ -216,7 +216,7 @@ const overlay = document.getElementById('overlay');
 const statusEl = document.getElementById('statusOverlay');
 const hint = document.getElementById('hint');
 
-let currentMode = 'idle'; // 'idle' | 'loop' | 'feature'
+let currentMode = 'idle'; // 'idle' | 'loop' | 'feature' | 'paused'
 let loopItems = [];
 let loopIndex = 0;
 let featureFile = '';
@@ -243,7 +243,7 @@ function handleMessage(msg) {
     case 'state':
       if (msg.config.status === 'running' && msg.config.loopFolder) {
         fetchAndStartLoop();
-      } else if (msg.config.status === 'feature' && msg.config.featureFile) {
+      } else if ((msg.config.status === 'feature' || msg.config.status === 'paused') && msg.config.featureFile) {
         pendingAudioTrack = msg.config.featureAudioTrack ?? null;
         pendingSubtitleTrack = msg.config.featureSubtitleTrack ?? null;
         pendingDelay = msg.config.filmAudio?.delay ?? 0;
@@ -268,11 +268,9 @@ function handleMessage(msg) {
     case 'pause_feature':
       if (currentMode === 'feature') {
         savedFeatureTime = video.currentTime;
+        currentMode = 'paused';
         video.pause();
-        currentMode = 'loop';
-        clearWelcomeTimers();
-        loopIndex = 0;
-        playLoopItem(0);
+        fadeIn(() => setStatus('Pause'));
         fetch('/api/feature-paused', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -282,23 +280,12 @@ function handleMessage(msg) {
       break;
 
     case 'resume_feature':
-      featureFile = msg.file;
-      pendingAudioTrack = msg.audioTrack ?? null;
-      pendingSubtitleTrack = msg.subtitleTrack ?? null;
-      pendingDelay = msg.delay ?? 0;
-      currentMode = 'feature';
-      clearWelcomeTimers();
-      fadeIn(() => {
-        hideWelcomePage();
-        const trackParam = pendingAudioTrack !== null ? `&audioTrack=${pendingAudioTrack}` : '';
-        const timeParam = msg.startTime > 0 ? `&startTime=${Math.floor(msg.startTime)}` : '';
-        const delayParam = pendingDelay ? `&delay=${pendingDelay}` : '';
-        video.src = `/video?path=${encodeURIComponent(featureFile)}${trackParam}${timeParam}${delayParam}`;
+      if (currentMode === 'paused') {
+        currentMode = 'feature';
         video.play().catch(e => console.warn('Play error:', e));
-        showVideo();
         setStatus(`Film — ${featureFile.split('/').pop()}`);
         fadeOut();
-      });
+      }
       break;
 
     case 'stop':
