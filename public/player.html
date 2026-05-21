@@ -20,6 +20,8 @@
   }
 
   #videoEl {
+    position: absolute;
+    inset: 0;
     width: 100%;
     height: 100%;
     object-fit: contain;
@@ -270,7 +272,7 @@ function handleMessage(msg) {
         savedFeatureTime = video.currentTime;
         currentMode = 'paused';
         video.pause();
-        fadeIn(() => setStatus('Pause'));
+        setStatus('Pause');
         fetch('/api/feature-paused', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -284,7 +286,6 @@ function handleMessage(msg) {
         currentMode = 'feature';
         video.play().catch(e => console.warn('Play error:', e));
         setStatus(`Film — ${featureFile.split('/').pop()}`);
-        fadeOut();
       }
       break;
 
@@ -330,8 +331,8 @@ function playLoopItem(index) {
   const item = loopItems[index];
   if (!item) return;
 
-  if (item.type === 'welcome_page') {
-    fadeIn(() => {
+  fadeIn(() => {
+    if (item.type === 'welcome_page') {
       clearWelcomeTimers();
       video.pause();
       video.style.display = 'none';
@@ -345,26 +346,20 @@ function playLoopItem(index) {
           playLoopItem(loopIndex);
         }
       }, item.duration * 1000);
-    });
-  } else {
-    fadeIn(() => {
+    } else {
       hideWelcomePage();
       video.src = `/video?path=${encodeURIComponent(item.path)}`;
       video.play().catch(e => console.warn('Play error:', e));
       showVideo();
       setStatus(`Boucle — ${item.name}`);
       fadeOut();
-    });
-  }
+    }
+  });
 }
 
 video.addEventListener('ended', () => {
-  if (currentMode === 'loop') {
-    loopIndex = (loopIndex + 1) % loopItems.length;
-    playLoopItem(loopIndex);
-  } else if (currentMode === 'feature') {
-    fetch('/api/feature-ended', { method: 'POST' });
-  }
+  if (currentMode === 'loop') { loopIndex = (loopIndex + 1) % loopItems.length; playLoopItem(loopIndex); }
+  else if (currentMode === 'feature') { fetch('/api/feature-ended', { method: 'POST' }); }
 });
 
 // --- Subtitle track ---
