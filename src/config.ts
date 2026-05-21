@@ -5,7 +5,7 @@ import type { Config } from './types';
 export const CONFIG_FILE = path.join(__dirname, '..', 'config.json');
 
 const DEFAULTS: Config = {
-  loopFolder: '', featureFile: '', featureTime: '', featureAudioTrack: null, status: 'idle',
+  loopFolder: '', featureFile: '', featureTime: '', featureAudioTrack: null, featureSubtitleTrack: null, status: 'idle',
   welcomePageInterval: null,
   welcomePageDuration: 30,
   welcomePage: {

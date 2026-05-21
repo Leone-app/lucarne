@@ -1,5 +1,5 @@
 import React from 'react';
-import type { Config, VideoFile, WelcomePageConfig, LoopMusicConfig, FilmAudioConfig, AudioTrackInfo } from './types';
+import type { Config, VideoFile, WelcomePageConfig, LoopMusicConfig, FilmAudioConfig, AudioTrackInfo, SubtitleTrackInfo } from './types';
 import {
   Field, ToggleRow, Segmented, SummaryRow,
   FolderIcon, ClapIcon, SpeakerIcon, CaptionIcon, MusicIcon,
@@ -15,12 +15,6 @@ const PALETTE = [
   { name: 'Crème',    bg: '#ece6d5', fg: '#1a1410',  accent: '#8a3a2f' },
 ];
 
-const SUBTITLE_OPTIONS = [
-  { id: 'none', label: 'Aucun' },
-  { id: 'fr',   label: 'Français' },
-  { id: 'en',   label: 'Anglais' },
-  { id: 'fr-sdh', label: 'Français · Malentendants' },
-];
 
 const OUTPUT_OPTIONS = [
   { id: 'auto',     label: 'Sortie système par défaut' },
@@ -32,6 +26,7 @@ interface IdleViewProps {
   config: Config;
   videos: VideoFile[];
   audioTracks: AudioTrackInfo[];
+  subtitleTracks: SubtitleTrackInfo[];
   tab: 'programmation' | 'accueil';
   setTab: (t: 'programmation' | 'accueil') => void;
   saveConfig: (patch: Partial<Config>) => void;
@@ -40,7 +35,7 @@ interface IdleViewProps {
   startSession: () => void;
 }
 
-export function IdleView({ config, videos, audioTracks, tab, setTab, saveConfig, scheduledTimeMs, timeUntil, startSession }: IdleViewProps) {
+export function IdleView({ config, videos, audioTracks, subtitleTracks, tab, setTab, saveConfig, scheduledTimeMs, timeUntil, startSession }: IdleViewProps) {
   const page = config.welcomePage;
   const music = config.loopMusic;
   const film = config.filmAudio;
@@ -242,8 +237,23 @@ export function IdleView({ config, videos, audioTracks, tab, setTab, saveConfig,
                 <Field label="Sous-titres">
                   <div className="input">
                     <span className="icon"><CaptionIcon /></span>
-                    <select className="bare" value={film.subtitles} onChange={(e) => setFilm({ subtitles: e.target.value })}>
-                      {SUBTITLE_OPTIONS.map((o) => <option key={o.id} value={o.id}>{o.label}</option>)}
+                    <select
+                      className="bare"
+                      value={config.featureSubtitleTrack ?? -1}
+                      onChange={(e) => {
+                        const v = parseInt(e.target.value);
+                        saveConfig({ featureSubtitleTrack: v === -1 ? null : v });
+                      }}
+                    >
+                      <option value={-1}>Aucun</option>
+                      {subtitleTracks.map((t) => (
+                        <option key={t.index} value={t.index}>
+                          {t.index} · {t.language}{t.title ? ` — ${t.title}` : ''} ({t.codec})
+                        </option>
+                      ))}
+                      {subtitleTracks.length === 0 && config.featureFile && (
+                        <option disabled value={-2}>Aucune piste détectée</option>
+                      )}
                     </select>
                   </div>
                 </Field>
@@ -285,7 +295,11 @@ export function IdleView({ config, videos, audioTracks, tab, setTab, saveConfig,
                 <SummaryRow k="Page d'accueil" v={config.welcomePageInterval ? `Toutes les ${config.welcomePageInterval} vidéos · ${config.welcomePageDuration}s` : 'Désactivée'} />
                 <SummaryRow k="Musique boucle" v={music.enabled ? (music.file || 'Activée') : 'Désactivée'} />
                 <SummaryRow k="Film" v={config.featureFile ? config.featureFile.split('/').pop()! : '—'} />
-                <SummaryRow k="Sous-titres" v={SUBTITLE_OPTIONS.find((s) => s.id === film.subtitles)?.label || '—'} />
+                <SummaryRow k="Sous-titres" v={(() => {
+                  if (config.featureSubtitleTrack === null) return 'Aucun';
+                  const t = subtitleTracks.find(s => s.index === config.featureSubtitleTrack);
+                  return t ? ([t.language, t.title].filter(Boolean).join(' — ') || `Piste ${t.index}`) : `Piste ${config.featureSubtitleTrack}`;
+                })()} />
                 <SummaryRow k="Démarrage" v={<span>{config.featureTime || '—'} <span style={{ color: 'var(--muted)' }}>· dans {timeUntil}</span></span>} gold />
               </div>
             </section>

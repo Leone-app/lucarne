@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import type { Config, LoopItem, AudioTrackInfo } from './types';
+import type { Config, LoopItem, AudioTrackInfo, SubtitleTrackInfo } from './types';
 import { SummaryRow, PlayIcon, SquareIcon, RotateIcon, MusicIcon, LockIcon } from './ui';
 import { BroadcastStage } from './BroadcastStage';
 
@@ -7,6 +7,7 @@ interface LiveViewProps {
   config: Config;
   loopItems: LoopItem[];
   audioTracks: AudioTrackInfo[];
+  subtitleTracks: SubtitleTrackInfo[];
   livePhase: 'loop' | 'feature' | 'paused';
   setLivePhase: (p: 'loop' | 'feature' | 'paused') => void;
   scheduledTimeMs: number;
@@ -64,7 +65,7 @@ function LiveScreen({ phase, loopItems, config }: {
   );
 }
 
-export function LiveView({ config, loopItems, audioTracks, livePhase, setLivePhase, scheduledTimeMs, timeUntil, stopSession, playFeatureNow, pauseFeature, resumeFeature }: LiveViewProps) {
+export function LiveView({ config, loopItems, audioTracks, subtitleTracks, livePhase, setLivePhase, scheduledTimeMs, timeUntil, stopSession, playFeatureNow, pauseFeature, resumeFeature }: LiveViewProps) {
   const [liveLoopIdx, setLiveLoopIdx] = useState(0);
   const [liveElapsed, setLiveElapsed] = useState(0);
 
@@ -109,12 +110,6 @@ export function LiveView({ config, loopItems, audioTracks, livePhase, setLivePha
     }
   };
 
-  const SUBTITLE_OPTIONS = [
-    { id: 'none', label: 'Aucun' },
-    { id: 'fr',   label: 'Français' },
-    { id: 'en',   label: 'Anglais' },
-    { id: 'fr-sdh', label: 'Français · Malentendants' },
-  ];
 
   return (
     <div className="live-shell">
@@ -296,7 +291,13 @@ export function LiveView({ config, loopItems, audioTracks, livePhase, setLivePha
                 : config.featureAudioTrack !== null ? `Piste ${config.featureAudioTrack}` : 'Auto';
               return <SummaryRow k="Piste audio" v={label} />;
             })()}
-            <SummaryRow k="Sous-titres" v={SUBTITLE_OPTIONS.find(s => s.id === config.filmAudio.subtitles)?.label || '—'} />
+            {(() => {
+              const t = subtitleTracks.find(s => s.index === (config.featureSubtitleTrack ?? -1));
+              const label = t
+                ? [t.language, t.title].filter(Boolean).join(' — ') || `Piste ${t.index}`
+                : config.featureSubtitleTrack !== null ? `Piste ${config.featureSubtitleTrack}` : 'Aucun';
+              return <SummaryRow k="Sous-titres" v={label} />;
+            })()}
             <SummaryRow k="Volume film" v={`${config.filmAudio.volume}%`} />
             <SummaryRow k="Musique boucle" v={config.loopMusic.enabled ? `${config.loopMusic.volume}%` : 'Désactivée'} />
             <SummaryRow k="Page d'accueil" v={config.welcomePageInterval ? `Toutes les ${config.welcomePageInterval} vidéos` : 'Désactivée'} />
