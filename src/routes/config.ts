@@ -1,7 +1,13 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
-import type { AppState } from '../types';
+import type { AppState, Config } from '../types';
 import { getAudioTracks } from '../ffprobe';
+
+const UPDATABLE_KEYS: (keyof Config)[] = [
+  'loopFolder', 'featureFile', 'featureTime', 'featureAudioTrack',
+  'welcomePage', 'welcomePageInterval', 'welcomePageDuration',
+  'loopMusic', 'filmAudio',
+];
 
 export function createConfigRouter(state: AppState): Router {
   const router = Router();
@@ -21,17 +27,13 @@ export function createConfigRouter(state: AppState): Router {
   });
 
   router.post('/config', (req: Request, res: Response) => {
-    const { loopFolder, featureFile, featureTime, featureAudioTrack } = req.body as {
-      loopFolder?: string;
-      featureFile?: string;
-      featureTime?: string;
-      featureAudioTrack?: number | null;
-    };
+    const body = req.body as Partial<Config>;
 
-    if (loopFolder !== undefined) state.config.loopFolder = loopFolder;
-    if (featureFile !== undefined) state.config.featureFile = featureFile;
-    if (featureTime !== undefined) state.config.featureTime = featureTime;
-    if (featureAudioTrack !== undefined) state.config.featureAudioTrack = featureAudioTrack;
+    for (const key of UPDATABLE_KEYS) {
+      if (body[key] !== undefined) {
+        (state.config as unknown as Record<string, unknown>)[key] = body[key];
+      }
+    }
 
     state.saveConfig();
     state.broadcast({ type: 'config_update', config: state.config });

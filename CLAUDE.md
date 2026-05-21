@@ -52,3 +52,6 @@ Le serveur envoie un message `state` à chaque nouvelle connexion. Les messages 
 
 **AppState**
 Pattern factory pour éviter les dépendances circulaires. `server.ts` crée un objet `AppState` avec des closures et le passe à tous les routers — ni `scheduler.ts` ni `watcher.ts` n'importent depuis `server.ts`.
+
+## Code style
+- All code comments must be written in English.

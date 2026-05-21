@@ -28,16 +28,32 @@ videoRouter.get('/', (req: Request, res: Response) => {
   if (ext === '.mkv') {
     const audioTrackParam = req.query.audioTrack as string | undefined;
     const audioTrack = audioTrackParam !== undefined ? parseInt(audioTrackParam, 10) : 0;
+    const startTime = parseFloat(req.query.startTime as string) || 0;
+    const delay = parseFloat(req.query.delay as string) || 0;
 
-    const ffmpeg = spawn(ffmpegInstaller.path, [
-      '-loglevel', 'warning',
+    const args: string[] = ['-loglevel', 'warning'];
+    if (startTime > 0) args.push('-ss', String(Math.floor(startTime)));
+    args.push(
       '-i', filePath,
       '-map', '0:v:0',
       '-map', `0:a:${audioTrack}`,
+    );
+
+    // aresample=async=1 fixes initial PTS offset from MKV transcoding
+    const audioFilters = ['aresample=async=1'];
+    if (delay !== 0) {
+      const delayMs = Math.round(delay * 1000);
+      if (delayMs > 0) audioFilters.push(`adelay=${delayMs}:all=1`);
+      // negative delay (advance audio): not supported without dual-input seek
+    }
+
+    const ffmpeg = spawn(ffmpegInstaller.path, [
+      ...args,
       '-c:v', 'copy',
       '-c:a', 'aac',
       '-ac', '2',
       '-ar', '48000',
+      '-af', audioFilters.join(','),
       '-movflags', 'frag_keyframe+empty_moov+default_base_moof',
       '-f', 'mp4',
       'pipe:1',

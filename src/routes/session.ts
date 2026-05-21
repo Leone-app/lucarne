@@ -1,9 +1,25 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
-import type { AppState } from '../types';
+import type { AppState, Config, VideoFile, LoopItem } from '../types';
+
+function buildLoopItems(videos: VideoFile[], config: Config): LoopItem[] {
+  const { welcomePageInterval, welcomePageDuration, welcomePage } = config;
+  const items: LoopItem[] = [];
+  const wp: LoopItem = { type: 'welcome_page', duration: welcomePageDuration, config: welcomePage };
+
+  if (welcomePageInterval) items.push(wp);
+
+  videos.forEach((v, i) => {
+    items.push({ type: 'video', ...v });
+    if (welcomePageInterval && (i + 1) % welcomePageInterval === 0) items.push(wp);
+  });
+
+  return items.length ? items : videos.map(v => ({ type: 'video', ...v }));
+}
 
 export function createSessionRouter(state: AppState): Router {
   const router = Router();
+  let pausedAt = 0;
 
   router.post('/start', (_req: Request, res: Response) => {
     if (!state.config.loopFolder) {
@@ -15,7 +31,7 @@ export function createSessionRouter(state: AppState): Router {
     state.saveConfig();
 
     const videos = state.getVideosInFolder(state.config.loopFolder);
-    state.broadcast({ type: 'play_loop', videos });
+    state.broadcast({ type: 'play_loop', items: buildLoopItems(videos, state.config) });
 
     if (state.config.featureTime && state.config.featureFile) {
       state.scheduleFeature(state.config.featureTime);
@@ -40,15 +56,41 @@ export function createSessionRouter(state: AppState): Router {
     state.cancelSchedule();
     state.config.status = 'feature';
     state.saveConfig();
-    state.broadcast({ type: 'play_feature', file: state.config.featureFile, audioTrack: state.config.featureAudioTrack ?? undefined });
+    state.broadcast({ type: 'play_feature', file: state.config.featureFile, audioTrack: state.config.featureAudioTrack ?? undefined, delay: state.config.filmAudio.delay });
+    res.json({ ok: true });
+  });
+
+  router.post('/pause-feature', (_req: Request, res: Response) => {
+    state.config.status = 'paused';
+    state.saveConfig();
+    state.broadcast({ type: 'pause_feature' });
+    res.json({ ok: true });
+  });
+
+  router.post('/feature-paused', (req: Request, res: Response) => {
+    pausedAt = Number((req.body as { time?: number }).time) || 0;
+    state.broadcast({ type: 'feature_paused', time: pausedAt });
+    res.json({ ok: true });
+  });
+
+  router.post('/resume-feature', (_req: Request, res: Response) => {
+    if (!state.config.featureFile) {
+      res.status(400).json({ error: 'No feature file configured' });
+      return;
+    }
+    state.config.status = 'feature';
+    state.saveConfig();
+    state.broadcast({ type: 'resume_feature', file: state.config.featureFile, audioTrack: state.config.featureAudioTrack ?? undefined, startTime: pausedAt, delay: state.config.filmAudio.delay });
+    pausedAt = 0;
     res.json({ ok: true });
   });
 
   router.post('/feature-ended', (_req: Request, res: Response) => {
     state.config.status = 'running';
     state.saveConfig();
+
     const videos = state.getVideosInFolder(state.config.loopFolder);
-    state.broadcast({ type: 'play_loop', videos });
+    state.broadcast({ type: 'play_loop', items: buildLoopItems(videos, state.config) });
 
     if (state.config.featureTime && state.config.featureFile) {
       state.scheduleFeature(state.config.featureTime);
