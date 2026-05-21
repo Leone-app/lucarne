@@ -222,6 +222,7 @@ let loopIndex = 0;
 let featureFile = '';
 let pendingAudioTrack = null;
 let pendingDelay = 0;
+let pendingSubtitleTrack = null;
 let savedFeatureTime = 0;
 let welcomeClockInterval = null;
 let welcomeTimeout = null;
@@ -244,6 +245,7 @@ function handleMessage(msg) {
         fetchAndStartLoop();
       } else if (msg.config.status === 'feature' && msg.config.featureFile) {
         pendingAudioTrack = msg.config.featureAudioTrack ?? null;
+        pendingSubtitleTrack = msg.config.featureSubtitleTrack ?? null;
         pendingDelay = msg.config.filmAudio?.delay ?? 0;
         startFeature(msg.config.featureFile);
       }
@@ -258,6 +260,7 @@ function handleMessage(msg) {
     case 'play_feature':
       featureFile = msg.file;
       pendingAudioTrack = msg.audioTrack ?? null;
+      pendingSubtitleTrack = msg.subtitleTrack ?? null;
       pendingDelay = msg.delay ?? 0;
       startFeature(featureFile);
       break;
@@ -281,6 +284,7 @@ function handleMessage(msg) {
     case 'resume_feature':
       featureFile = msg.file;
       pendingAudioTrack = msg.audioTrack ?? null;
+      pendingSubtitleTrack = msg.subtitleTrack ?? null;
       pendingDelay = msg.delay ?? 0;
       currentMode = 'feature';
       clearWelcomeTimers();
@@ -376,6 +380,19 @@ video.addEventListener('ended', () => {
   }
 });
 
+// --- Subtitle track ---
+function applySubtitleTrack(filePath) {
+  Array.from(video.querySelectorAll('track')).forEach(t => t.remove());
+  if (pendingSubtitleTrack === null) return;
+  const trackEl = document.createElement('track');
+  trackEl.kind = 'subtitles';
+  trackEl.src = `/api/subtitles?path=${encodeURIComponent(filePath)}&track=${pendingSubtitleTrack}`;
+  video.appendChild(trackEl);
+  // 'default' attribute does not activate dynamically-added tracks — force mode explicitly
+  trackEl.track.mode = 'showing';
+  trackEl.addEventListener('load', () => { trackEl.track.mode = 'showing'; });
+}
+
 // --- Feature ---
 function startFeature(filePath) {
   currentMode = 'feature';
@@ -385,6 +402,7 @@ function startFeature(filePath) {
     const trackParam = pendingAudioTrack !== null ? `&audioTrack=${pendingAudioTrack}` : '';
     const delayParam = pendingDelay ? `&delay=${pendingDelay}` : '';
     video.src = `/video?path=${encodeURIComponent(filePath)}${trackParam}${delayParam}`;
+    applySubtitleTrack(filePath);
     video.play().catch(e => console.warn('Play error:', e));
     showVideo();
     setStatus(`Film — ${filePath.split('/').pop()}`);
@@ -399,6 +417,7 @@ function stopAll() {
   fadeIn(() => {
     video.pause();
     video.src = '';
+    Array.from(video.querySelectorAll('track')).forEach(t => t.remove());
     hideVideo();
     hideWelcomePage();
     setStatus('En attente');

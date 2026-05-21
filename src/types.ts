@@ -35,6 +35,7 @@ export interface Config {
   featureFile: string;
   featureTime: string;
   featureAudioTrack: number | null;
+  featureSubtitleTrack: number | null;
   status: 'idle' | 'running' | 'feature' | 'paused';
   welcomePage: WelcomePageConfig;
   welcomePageInterval: number | null;
@@ -44,6 +45,13 @@ export interface Config {
 }
 
 export interface AudioTrackInfo {
+  index: number;
+  language: string;
+  title: string;
+  codec: string;
+}
+
+export interface SubtitleTrackInfo {
   index: number;
   language: string;
   title: string;
@@ -64,11 +72,11 @@ export type WSMessage =
   | { type: 'config_update'; config: Config }
   | { type: 'folder_update'; videos: VideoFile[] }
   | { type: 'play_loop'; items: LoopItem[] }
-  | { type: 'play_feature'; file: string; audioTrack?: number; delay?: number }
+  | { type: 'play_feature'; file: string; audioTrack?: number; subtitleTrack?: number; delay?: number }
   | { type: 'live_phase'; phase: 'loop' | 'feature' }
   | { type: 'pause_feature' }
   | { type: 'feature_paused'; time: number }
-  | { type: 'resume_feature'; file: string; audioTrack?: number; startTime: number; delay?: number }
+  | { type: 'resume_feature'; file: string; audioTrack?: number; subtitleTrack?: number; startTime: number; delay?: number }
   | { type: 'stop' };
 
 export interface AppState {

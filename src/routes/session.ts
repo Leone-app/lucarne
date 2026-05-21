@@ -56,7 +56,7 @@ export function createSessionRouter(state: AppState): Router {
     state.cancelSchedule();
     state.config.status = 'feature';
     state.saveConfig();
-    state.broadcast({ type: 'play_feature', file: state.config.featureFile, audioTrack: state.config.featureAudioTrack ?? undefined, delay: state.config.filmAudio.delay });
+    state.broadcast({ type: 'play_feature', file: state.config.featureFile, audioTrack: state.config.featureAudioTrack ?? undefined, subtitleTrack: state.config.featureSubtitleTrack ?? undefined, delay: state.config.filmAudio.delay });
     res.json({ ok: true });
   });
 
@@ -80,7 +80,7 @@ export function createSessionRouter(state: AppState): Router {
     }
     state.config.status = 'feature';
     state.saveConfig();
-    state.broadcast({ type: 'resume_feature', file: state.config.featureFile, audioTrack: state.config.featureAudioTrack ?? undefined, startTime: pausedAt, delay: state.config.filmAudio.delay });
+    state.broadcast({ type: 'resume_feature', file: state.config.featureFile, audioTrack: state.config.featureAudioTrack ?? undefined, subtitleTrack: state.config.featureSubtitleTrack ?? undefined, startTime: pausedAt, delay: state.config.filmAudio.delay });
     pausedAt = 0;
     res.json({ ok: true });
   });

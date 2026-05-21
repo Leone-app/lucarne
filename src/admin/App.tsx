@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import type { Config, LoopItem, VideoFile, AudioTrackInfo } from './types';
+import type { Config, LoopItem, VideoFile, AudioTrackInfo, SubtitleTrackInfo } from './types';
 import { IdleView } from './IdleView';
 import { LiveView } from './LiveView';
 import { LeoneWordmark } from './ui';
@@ -9,6 +9,7 @@ const DEFAULT_CONFIG: Config = {
   featureFile: '',
   featureTime: '',
   featureAudioTrack: null,
+  featureSubtitleTrack: null,
   status: 'idle',
   welcomePage: {
     mode: 'time',
@@ -26,6 +27,7 @@ export function App() {
   const [config, setConfig] = useState<Config>(DEFAULT_CONFIG);
   const [videos, setVideos] = useState<VideoFile[]>([]);
   const [audioTracks, setAudioTracks] = useState<AudioTrackInfo[]>([]);
+  const [subtitleTracks, setSubtitleTracks] = useState<SubtitleTrackInfo[]>([]);
   const [sessionState, setSessionState] = useState<'idle' | 'running'>('idle');
   const [livePhase, setLivePhase] = useState<'loop' | 'feature' | 'paused'>('loop');
   const [loopItems, setLoopItems] = useState<LoopItem[]>([]);
@@ -79,13 +81,17 @@ export function App() {
       .catch(() => {});
   }, []);
 
-  /* ── fetch audio tracks when feature file changes ── */
+  /* ── fetch audio + subtitle tracks when feature file changes ── */
   useEffect(() => {
-    if (!config.featureFile) { setAudioTracks([]); return; }
+    if (!config.featureFile) { setAudioTracks([]); setSubtitleTracks([]); return; }
     fetch(`/api/audio-tracks?path=${encodeURIComponent(config.featureFile)}`)
       .then(r => r.json())
       .then(setAudioTracks)
       .catch(() => setAudioTracks([]));
+    fetch(`/api/subtitle-tracks?path=${encodeURIComponent(config.featureFile)}`)
+      .then(r => r.json())
+      .then(setSubtitleTracks)
+      .catch(() => setSubtitleTracks([]));
   }, [config.featureFile]);
 
   /* ── save config (debounced per call site) ── */
@@ -178,6 +184,7 @@ export function App() {
           config={config}
           videos={videos}
           audioTracks={audioTracks}
+          subtitleTracks={subtitleTracks}
           tab={tab}
           setTab={setTab}
           saveConfig={saveConfig}
@@ -190,6 +197,7 @@ export function App() {
           config={config}
           loopItems={loopItems}
           audioTracks={audioTracks}
+          subtitleTracks={subtitleTracks}
           livePhase={livePhase}
           setLivePhase={setLivePhase}
           scheduledTimeMs={scheduledTimeMs}

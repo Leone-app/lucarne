@@ -1,6 +1,6 @@
 import { spawnSync } from 'child_process';
 import ffprobeInstaller from '@ffprobe-installer/ffprobe';
-import type { AudioTrackInfo } from './types';
+import type { AudioTrackInfo, SubtitleTrackInfo } from './types';
 
 interface FfprobeStream {
   codec_name?: string;
@@ -22,6 +22,32 @@ export function getAudioTracks(filePath: string): AudioTrackInfo[] {
       '-print_format', 'json',
       '-show_streams',
       '-select_streams', 'a',
+      filePath,
+    ], { encoding: 'utf8', timeout: 10000 });
+
+    if (result.status !== 0 || !result.stdout) return [];
+
+    const output = JSON.parse(result.stdout) as FfprobeOutput;
+    const streams = output.streams ?? [];
+
+    return streams.map((s, i) => ({
+      index: i,
+      language: s.tags?.language ?? '',
+      title: s.tags?.title ?? s.tags?.handler_name ?? '',
+      codec: s.codec_name ?? '',
+    }));
+  } catch {
+    return [];
+  }
+}
+
+export function getSubtitleTracks(filePath: string): SubtitleTrackInfo[] {
+  try {
+    const result = spawnSync(ffprobeInstaller.path, [
+      '-v', 'quiet',
+      '-print_format', 'json',
+      '-show_streams',
+      '-select_streams', 's',
       filePath,
     ], { encoding: 'utf8', timeout: 10000 });
 
