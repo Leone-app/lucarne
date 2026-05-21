@@ -40,11 +40,16 @@ videoRouter.get('/', (req: Request, res: Response) => {
     );
 
     // aresample=async=1 fixes initial PTS offset from MKV transcoding
+    // delay is in milliseconds (matching the UI slider unit)
     const audioFilters = ['aresample=async=1'];
     if (delay !== 0) {
-      const delayMs = Math.round(delay * 1000);
-      if (delayMs > 0) audioFilters.push(`adelay=${delayMs}:all=1`);
-      // negative delay (advance audio): not supported without dual-input seek
+      const absMs = Math.abs(delay);
+      if (delay > 0) {
+        audioFilters.push(`adelay=${Math.round(absMs)}:all=1`);
+      } else {
+        // advance audio: trim the first |delay| ms and reset PTS to 0
+        audioFilters.push(`atrim=start=${absMs / 1000},asetpts=PTS-STARTPTS`);
+      }
     }
 
     const ffmpeg = spawn(ffmpegInstaller.path, [
