@@ -27,7 +27,7 @@ export function App() {
   const [videos, setVideos] = useState<VideoFile[]>([]);
   const [audioTracks, setAudioTracks] = useState<AudioTrackInfo[]>([]);
   const [sessionState, setSessionState] = useState<'idle' | 'running'>('idle');
-  const [livePhase, setLivePhase] = useState<'loop' | 'feature'>('loop');
+  const [livePhase, setLivePhase] = useState<'loop' | 'feature' | 'paused'>('loop');
   const [loopItems, setLoopItems] = useState<LoopItem[]>([]);
   const [tab, setTab] = useState<'programmation' | 'accueil'>('programmation');
 
@@ -51,6 +51,10 @@ export function App() {
           setSessionState('running');
           setLivePhase('loop');
         } else if (msg.type === 'play_feature') {
+          setLivePhase('feature');
+        } else if (msg.type === 'feature_paused') {
+          setLivePhase('paused');
+        } else if (msg.type === 'resume_feature') {
           setLivePhase('feature');
         } else if (msg.type === 'stop') {
           setSessionState('idle');
@@ -107,6 +111,14 @@ export function App() {
     fetch('/api/play-feature-now', { method: 'POST' }).catch(() => {});
   }, []);
 
+  const pauseFeature = useCallback(() => {
+    fetch('/api/pause-feature', { method: 'POST' }).catch(() => {});
+  }, []);
+
+  const resumeFeature = useCallback(() => {
+    fetch('/api/resume-feature', { method: 'POST' }).catch(() => {});
+  }, []);
+
   /* ── derived ── */
   const scheduledTimeMs = useMemo(() => {
     if (!config.featureTime) return Date.now() + 3600000;
@@ -132,7 +144,7 @@ export function App() {
     return `${m}m ${String(s).padStart(2, '0')}s`;
   }, [scheduledTimeMs, now]);
 
-  const liveLabel = livePhase === 'loop' ? 'Boucle' : 'Film en cours';
+  const liveLabel = livePhase === 'loop' ? 'Boucle' : livePhase === 'paused' ? 'Pause · Boucle' : 'Film en cours';
 
   return (
     <div className="shell">
@@ -184,6 +196,8 @@ export function App() {
           timeUntil={timeUntil}
           stopSession={stopSession}
           playFeatureNow={playFeatureNow}
+          pauseFeature={pauseFeature}
+          resumeFeature={resumeFeature}
         />
       )}
 

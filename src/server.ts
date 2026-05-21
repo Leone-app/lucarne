@@ -32,7 +32,7 @@ const state: AppState = {
   scheduleFeature: (timeStr: string) => doScheduleFeature(timeStr, () => {
     config.status = 'feature';
     persistConfig(config);
-    broadcast({ type: 'play_feature', file: config.featureFile, audioTrack: config.featureAudioTrack ?? undefined });
+    broadcast({ type: 'play_feature', file: config.featureFile, audioTrack: config.featureAudioTrack ?? undefined, delay: config.filmAudio.delay });
   }),
   cancelSchedule,
   broadcast,

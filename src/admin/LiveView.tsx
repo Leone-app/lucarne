@@ -7,25 +7,30 @@ interface LiveViewProps {
   config: Config;
   loopItems: LoopItem[];
   audioTracks: AudioTrackInfo[];
-  livePhase: 'loop' | 'feature';
-  setLivePhase: (p: 'loop' | 'feature') => void;
+  livePhase: 'loop' | 'feature' | 'paused';
+  setLivePhase: (p: 'loop' | 'feature' | 'paused') => void;
   scheduledTimeMs: number;
   timeUntil: string;
   stopSession: () => void;
   playFeatureNow: () => void;
+  pauseFeature: () => void;
+  resumeFeature: () => void;
 }
 
 function LiveScreen({ phase, loopItems, config }: {
-  phase: 'loop' | 'feature';
+  phase: 'loop' | 'feature' | 'paused';
   loopItems: LoopItem[];
   config: Config;
 }) {
   let content: React.ReactNode;
-  if (phase === 'loop') {
+  if (phase === 'loop' || phase === 'paused') {
     content = (
       <div style={{ width: '100%', height: '100%', background: '#000', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at center, #1a1a1a 0%, #000 80%)' }} />
         <div style={{ position: 'relative', textAlign: 'center' }}>
+          {phase === 'paused' && (
+            <div style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '1.2cqw', color: '#e8c878', letterSpacing: '0.3em', marginBottom: '1.2cqw' }}>⏸ FILM EN PAUSE</div>
+          )}
           <div style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '1.5cqw', color: 'rgba(255,255,255,0.65)', letterSpacing: '0.3em' }}>► BOUCLE EN COURS</div>
           <div style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '1cqw', color: 'rgba(255,255,255,0.35)', letterSpacing: '0.2em', marginTop: '1.2cqw' }}>
             {loopItems.filter(i => i.type === 'video').length} vidéo{loopItems.filter(i => i.type === 'video').length !== 1 ? 's' : ''}
@@ -59,7 +64,7 @@ function LiveScreen({ phase, loopItems, config }: {
   );
 }
 
-export function LiveView({ config, loopItems, audioTracks, livePhase, setLivePhase, scheduledTimeMs, timeUntil, stopSession, playFeatureNow }: LiveViewProps) {
+export function LiveView({ config, loopItems, audioTracks, livePhase, setLivePhase, scheduledTimeMs, timeUntil, stopSession, playFeatureNow, pauseFeature, resumeFeature }: LiveViewProps) {
   const [liveLoopIdx, setLiveLoopIdx] = useState(0);
   const [liveElapsed, setLiveElapsed] = useState(0);
 
@@ -67,7 +72,7 @@ export function LiveView({ config, loopItems, audioTracks, livePhase, setLivePha
 
   /* ── simulate loop progress ── */
   useEffect(() => {
-    if (livePhase !== 'loop') return;
+    if (livePhase !== 'loop' && livePhase !== 'paused') return;
     const id = setInterval(() => {
       setLiveElapsed((e) => e + 1);
     }, 1000);
@@ -99,7 +104,7 @@ export function LiveView({ config, loopItems, audioTracks, livePhase, setLivePha
   const handleFeatureToggle = () => {
     if (livePhase === 'loop') {
       playFeatureNow();
-    } else {
+    } else if (livePhase === 'feature') {
       setLivePhase('loop');
     }
   };
@@ -118,11 +123,13 @@ export function LiveView({ config, loopItems, audioTracks, livePhase, setLivePha
         <div className="info">
           <div className="stat">
             <span className="k">Phase</span>
-            <span className="v gold">{livePhase === 'loop' ? 'Boucle d\'accueil' : 'Film principal'}</span>
+            <span className="v gold">
+              {livePhase === 'loop' ? 'Boucle d\'accueil' : livePhase === 'paused' ? '⏸ Pause · Boucle en cours' : 'Film principal'}
+            </span>
           </div>
           <div className="stat">
-            <span className="k">{livePhase === 'feature' ? 'Film' : 'Film dans'}</span>
-            <span className="v big">{livePhase === 'feature' ? (config.featureFile?.split('/').pop() || '—') : timeUntil}</span>
+            <span className="k">{livePhase === 'feature' ? 'Film' : livePhase === 'paused' ? 'Film pausé' : 'Film dans'}</span>
+            <span className="v big">{livePhase === 'feature' ? (config.featureFile?.split('/').pop() || '—') : livePhase === 'paused' ? (config.featureFile?.split('/').pop() || '—') : timeUntil}</span>
           </div>
           <div className="stat">
             <span className="k">Séance</span>
@@ -130,9 +137,26 @@ export function LiveView({ config, loopItems, audioTracks, livePhase, setLivePha
           </div>
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
-          <button className="btn" onClick={handleFeatureToggle}>
-            {livePhase === 'loop' ? <><PlayIcon size={14} /> Lancer le film maintenant</> : <><RotateIcon size={14} /> Relancer la boucle</>}
-          </button>
+          {livePhase === 'loop' && (
+            <button className="btn" onClick={handleFeatureToggle}>
+              <PlayIcon size={14} /> Lancer le film maintenant
+            </button>
+          )}
+          {livePhase === 'feature' && (
+            <>
+              <button className="btn" onClick={pauseFeature}>
+                ⏸ Pause
+              </button>
+              <button className="btn" onClick={handleFeatureToggle}>
+                <RotateIcon size={14} /> Relancer la boucle
+              </button>
+            </>
+          )}
+          {livePhase === 'paused' && (
+            <button className="btn" style={{ background: 'var(--gold)', color: '#000', fontWeight: 600 }} onClick={resumeFeature}>
+              ▶ Reprendre le film
+            </button>
+          )}
           <button className="btn danger large" onClick={stopSession}>
             <SquareIcon size={13} /> Arrêter la séance
           </button>
@@ -151,12 +175,14 @@ export function LiveView({ config, loopItems, audioTracks, livePhase, setLivePha
           <section className="card">
             <div className="card-head">
               <h2>Déroulé de la séance</h2>
-              <span className="meta">{livePhase === 'feature' ? 'Film en cours' : `Reste ${timeUntil} avant le film`}</span>
+              <span className="meta">
+                {livePhase === 'feature' ? 'Film en cours' : livePhase === 'paused' ? '⏸ Film en pause' : `Reste ${timeUntil} avant le film`}
+              </span>
             </div>
             <div className="timeline-track">
               {timelineBlocks.map((b) => {
                 const isFilm = b.key === -1;
-                const isNow = !isFilm && livePhase === 'loop' && b.key === liveLoopIdx % Math.max(1, loopItems.length);
+                const isNow = !isFilm && (livePhase === 'loop' || livePhase === 'paused') && b.key === liveLoopIdx % Math.max(1, loopItems.length);
                 const isFilmNow = isFilm && livePhase === 'feature';
                 let cls = 'timeline-block';
                 if (isFilm) cls += ' film';
@@ -188,7 +214,7 @@ export function LiveView({ config, loopItems, audioTracks, livePhase, setLivePha
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div>
                 <div style={{ fontSize: 10, letterSpacing: '0.18em', color: 'var(--muted)', textTransform: 'uppercase', marginBottom: 6 }}>Maintenant</div>
-                {livePhase === 'loop' ? (
+                {livePhase === 'loop' || livePhase === 'paused' ? (
                   currentVideo ? (
                     <>
                       <div style={{ fontSize: 14, color: 'var(--gold)', fontFamily: '"JetBrains Mono", monospace' }}>{currentVideo.name}</div>
@@ -219,6 +245,10 @@ export function LiveView({ config, loopItems, audioTracks, livePhase, setLivePha
                     Film <span style={{ color: 'var(--cream)' }}>{config.featureFile?.split('/').pop() || '—'}</span>
                     {' '}à <span style={{ color: 'var(--gold)' }}>{config.featureTime || '—'}</span>
                   </div>
+                ) : livePhase === 'paused' ? (
+                  <div style={{ fontSize: 13, color: 'var(--cream-dim)' }}>
+                    Reprise du film <span style={{ color: 'var(--gold)' }}>{config.featureFile?.split('/').pop() || '—'}</span>
+                  </div>
                 ) : (
                   <div style={{ fontSize: 13, color: 'var(--cream-dim)' }}>Fin de séance</div>
                 )}
@@ -229,12 +259,14 @@ export function LiveView({ config, loopItems, audioTracks, livePhase, setLivePha
           <section className="card">
             <div className="card-head">
               <h2>Boucle · {videoItems.length} vidéo{videoItems.length !== 1 ? 's' : ''}</h2>
-              <span className="meta" style={{ color: 'var(--gold)' }}>En cours</span>
+              <span className="meta" style={{ color: livePhase === 'paused' ? '#e8c878' : 'var(--gold)' }}>
+                {livePhase === 'paused' ? '⏸ Entracte' : 'En cours'}
+              </span>
             </div>
             <div className="file-list">
               {videoItems.map((item, i) => {
                 if (item.type !== 'video') return null;
-                const isPlaying = livePhase === 'loop' && i === liveLoopIdx % Math.max(1, videoItems.length);
+                const isPlaying = (livePhase === 'loop' || livePhase === 'paused') && i === liveLoopIdx % Math.max(1, videoItems.length);
                 return (
                   <div key={item.path} className={`file-row${isPlaying ? ' playing' : ''}`}>
                     <span className="idx">{isPlaying ? <PlayIcon size={11} strokeWidth={2.2} /> : String(i + 1).padStart(2, '0')}</span>
