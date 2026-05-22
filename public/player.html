@@ -358,8 +358,13 @@ function playLoopItem(index) {
 }
 
 video.addEventListener('ended', () => {
-  if (currentMode === 'loop') { loopIndex = (loopIndex + 1) % loopItems.length; playLoopItem(loopIndex); }
-  else if (currentMode === 'feature') { fetch('/api/feature-ended', { method: 'POST' }); }
+  if (currentMode === 'loop') {
+    video.src = '';
+    loopIndex = (loopIndex + 1) % loopItems.length;
+    playLoopItem(loopIndex);
+  } else if (currentMode === 'feature') {
+    fetch('/api/feature-ended', { method: 'POST' });
+  }
 });
 
 // --- Subtitle track ---
