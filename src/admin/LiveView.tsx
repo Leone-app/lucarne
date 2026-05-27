@@ -24,19 +24,22 @@ function LiveScreen({ phase, loopItems, config }: {
   config: Config;
 }) {
   let content: React.ReactNode;
-  if (phase === 'loop' || phase === 'paused') {
+  if (phase === 'loop') {
     content = (
       <div style={{ width: '100%', height: '100%', background: '#000', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(ellipse at center, #1a1a1a 0%, #000 80%)' }} />
         <div style={{ position: 'relative', textAlign: 'center' }}>
-          {phase === 'paused' && (
-            <div style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '1.2cqw', color: '#e8c878', letterSpacing: '0.3em', marginBottom: '1.2cqw' }}>⏸ FILM EN PAUSE</div>
-          )}
           <div style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '1.5cqw', color: 'rgba(255,255,255,0.65)', letterSpacing: '0.3em' }}>► BOUCLE EN COURS</div>
           <div style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '1cqw', color: 'rgba(255,255,255,0.35)', letterSpacing: '0.2em', marginTop: '1.2cqw' }}>
             {loopItems.filter(i => i.type === 'video').length} vidéo{loopItems.filter(i => i.type === 'video').length !== 1 ? 's' : ''}
           </div>
         </div>
+      </div>
+    );
+  } else if (phase === 'paused') {
+    content = (
+      <div style={{ width: '100%', height: '100%', background: '#000', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ fontFamily: '"JetBrains Mono", monospace', fontSize: '1.2cqw', color: '#e8c878', letterSpacing: '0.3em' }}>⏸ FILM EN PAUSE</div>
       </div>
     );
   } else {
@@ -73,7 +76,7 @@ export function LiveView({ config, loopItems, audioTracks, subtitleTracks, liveP
 
   /* ── simulate loop progress ── */
   useEffect(() => {
-    if (livePhase !== 'loop' && livePhase !== 'paused') return;
+    if (livePhase !== 'loop') return;
     const id = setInterval(() => {
       setLiveElapsed((e) => e + 1);
     }, 1000);
@@ -119,7 +122,7 @@ export function LiveView({ config, loopItems, audioTracks, subtitleTracks, liveP
           <div className="stat">
             <span className="k">Phase</span>
             <span className="v gold">
-              {livePhase === 'loop' ? 'Boucle d\'accueil' : livePhase === 'paused' ? '⏸ Pause · Boucle en cours' : 'Film principal'}
+              {livePhase === 'loop' ? 'Boucle d\'accueil' : livePhase === 'paused' ? '⏸ Film en pause' : 'Film principal'}
             </span>
           </div>
           <div className="stat">
@@ -177,8 +180,8 @@ export function LiveView({ config, loopItems, audioTracks, subtitleTracks, liveP
             <div className="timeline-track">
               {timelineBlocks.map((b) => {
                 const isFilm = b.key === -1;
-                const isNow = !isFilm && (livePhase === 'loop' || livePhase === 'paused') && b.key === liveLoopIdx % Math.max(1, loopItems.length);
-                const isFilmNow = isFilm && livePhase === 'feature';
+                const isNow = !isFilm && livePhase === 'loop' && b.key === liveLoopIdx % Math.max(1, loopItems.length);
+                const isFilmNow = isFilm && (livePhase === 'feature' || livePhase === 'paused');
                 let cls = 'timeline-block';
                 if (isFilm) cls += ' film';
                 else if (b.isWelcome) cls += ' intro';
@@ -187,7 +190,7 @@ export function LiveView({ config, loopItems, audioTracks, subtitleTracks, liveP
                   <div
                     key={b.key}
                     className={cls}
-                    style={{ width: b.width, '--progress': isNow ? '40%' : '0%' } as React.CSSProperties}
+                    style={{ width: b.width, '--progress': isNow ? '40%' : isFilmNow ? '100%' : '0%' } as React.CSSProperties}
                   >
                     <span className="t-name" title={b.label}>{b.label}</span>
                     <span className="t-dur">{isFilm ? '—' : b.isWelcome ? `${config.welcomePageDuration}s` : '—'}</span>
@@ -209,7 +212,7 @@ export function LiveView({ config, loopItems, audioTracks, subtitleTracks, liveP
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <div>
                 <div style={{ fontSize: 10, letterSpacing: '0.18em', color: 'var(--muted)', textTransform: 'uppercase', marginBottom: 6 }}>Maintenant</div>
-                {livePhase === 'loop' || livePhase === 'paused' ? (
+                {livePhase === 'loop' ? (
                   currentVideo ? (
                     <>
                       <div style={{ fontSize: 14, color: 'var(--gold)', fontFamily: '"JetBrains Mono", monospace' }}>{currentVideo.name}</div>
@@ -224,6 +227,10 @@ export function LiveView({ config, loopItems, audioTracks, subtitleTracks, liveP
                   ) : (
                     <div style={{ fontSize: 14, color: 'var(--cream-dim)' }}>Boucle d'accueil en cours</div>
                   )
+                ) : livePhase === 'paused' ? (
+                  <div style={{ fontSize: 16, color: 'var(--gold)', fontFamily: '"JetBrains Mono", monospace' }}>
+                    ⏸ {config.featureFile?.split('/').pop() || '—'}
+                  </div>
                 ) : (
                   <div style={{ fontSize: 16, color: 'var(--gold)', fontFamily: '"JetBrains Mono", monospace' }}>
                     {config.featureFile?.split('/').pop() || '—'}
@@ -254,14 +261,12 @@ export function LiveView({ config, loopItems, audioTracks, subtitleTracks, liveP
           <section className="card">
             <div className="card-head">
               <h2>Boucle · {videoItems.length} vidéo{videoItems.length !== 1 ? 's' : ''}</h2>
-              <span className="meta" style={{ color: livePhase === 'paused' ? '#e8c878' : 'var(--gold)' }}>
-                {livePhase === 'paused' ? '⏸ Entracte' : 'En cours'}
-              </span>
+              <span className="meta" style={{ color: 'var(--gold)' }}>En cours</span>
             </div>
             <div className="file-list">
               {videoItems.map((item, i) => {
                 if (item.type !== 'video') return null;
-                const isPlaying = (livePhase === 'loop' || livePhase === 'paused') && i === liveLoopIdx % Math.max(1, videoItems.length);
+                const isPlaying = livePhase === 'loop' && i === liveLoopIdx % Math.max(1, videoItems.length);
                 return (
                   <div key={item.path} className={`file-row${isPlaying ? ' playing' : ''}`}>
                     <span className="idx">{isPlaying ? <PlayIcon size={11} strokeWidth={2.2} /> : String(i + 1).padStart(2, '0')}</span>

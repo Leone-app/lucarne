@@ -39,7 +39,6 @@ videoRouter.get('/', (req: Request, res: Response) => {
       '-map', `0:a:${audioTrack}`,
     );
 
-    // aresample=async=1 fixes initial PTS offset from MKV transcoding
     // delay is in milliseconds (matching the UI slider unit)
     const audioFilters = ['aresample=async=1'];
     if (delay !== 0) {
@@ -47,8 +46,10 @@ videoRouter.get('/', (req: Request, res: Response) => {
       if (delay > 0) {
         audioFilters.push(`adelay=${Math.round(absMs)}:all=1`);
       } else {
-        // advance audio: trim the first |delay| ms and reset PTS to 0
-        audioFilters.push(`atrim=start=${absMs / 1000},asetpts=PTS-STARTPTS`);
+        // advance audio: trim first |delay|ms, then shift PTS back by same fixed amount
+        // PTS-(N/TB) subtracts the trim duration regardless of seek position;
+        // PTS-STARTPTS was wrong: it reset to 0 but video stays at ~119s after seek
+        audioFilters.push(`atrim=start=${absMs / 1000},asetpts=PTS-(${absMs / 1000}/TB)`);
       }
     }
 

@@ -150,7 +150,7 @@ export function App() {
     return `${m}m ${String(s).padStart(2, '0')}s`;
   }, [scheduledTimeMs, now]);
 
-  const liveLabel = livePhase === 'loop' ? 'Boucle' : livePhase === 'paused' ? 'Pause · Boucle' : 'Film en cours';
+  const liveLabel = livePhase === 'loop' ? 'Boucle' : livePhase === 'paused' ? 'Pause' : 'Film en cours';
 
   return (
     <div className="shell">
